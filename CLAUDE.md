@@ -34,7 +34,7 @@ OiTR の新世代版を ESP32-P4 ベースの 10.1 インチ表示モジュー�
 | LCD RST / Backlight (LEDC PWM) | 27 / 23 |
 | Touch RST / INT | 22 / 21 |
 | I2C SDA / SCL (touch, codec, camera SCCB) | 7 / 8 |
-| SD (SDMMC 4-bit) D0-D3 / CMD / CLK | 39,40,41,42 / 44 / 43 |
+| SD (SDMMC 4-bit) D0-D3 / CMD / CLK | 39,40,41,42 / 44 / 43 (電源は **オンチップ LDO channel 4** を `sd_pwr_ctrl_new_on_chip_ldo` で有効化する必要あり) |
 | I2S MCLK / BCLK / WS / DOUT / DIN | 13 / 12 / 10 / 9 / 11 |
 | MIPI DSI PHY LDO | channel 3, 2500 mV (必須) |
 
@@ -153,12 +153,22 @@ docs/              ベンダー資料 (参照専用)
 - **動画フォーマットは MJPEG に決定** (2026-11-06)。ESP32-P4 の H.264 はハードウェアエンコーダのみで、デコードは
   `esp_h264` のソフトウェア実装 (Baseline 限定、720p で 7〜10 fps) しかなく 720p30 は不可能。
   P4 のハードウェア JPEG デコーダ (`esp_driver_jpeg`) を使う MJPEG はベンダーデモで 720p30 実証済み。
-- 変換パラメータ: `ffmpeg -i in.mp4 -an -vf fps=30 -c:v mjpeg -q:v 12 -pix_fmt yuvj420p out.mjpeg`。
-  `elis.mp4` (H.264 Main 1280x720 29.97fps 2.1 Mbps, AAC-LC 44.1 kHz stereo, 30 秒 7.9 MB) は約 22.8 MB (2.9 倍) になる。
-  q=12 で PSNR 32.7 dB、見た目は元と同等。ユーザーは 30fps 優先で約 3 倍のサイズを受け入れている。
+- **フレームは変換時にパネルのネイティブ向き (800x1280 縦) に回転し、黒帯 80px も焼き込む** ("OiTR MJPEG")。
+  実行時に PPA で回転すると 1 フレーム 42 ms かかり 18 fps しか出なかった (実測 2026-11-06)。事前回転なら
+  HW JPEG デコーダが DPI フレームバッファへ直接書けるので、回転もコピーも不要。
+- 変換は `tools/convert_video.sh in.mp4 out_dir`。中身は
+  `ffmpeg -i in.mp4 -an -vf "fps=30,scale=1280:720,transpose=1,pad=800:1280:80:0:black" -c:v mjpeg -q:v 3 -pix_fmt yuvj420p -f mjpeg out.mjpeg`。
+  `elis.mp4` (H.264 Main 1280x720 29.97fps 2.1 Mbps, AAC-LC 44.1 kHz stereo, 30 秒 7.9 MB) は約 50 MB (6 倍) になる。
+  品質は **q=3** (PSNR 37.1 dB)。最初 q=12 (24 MB, 33.2 dB) で試したがブロックノイズが気になるとのことで上げた。
+  ユーザーは画質優先でサイズ増を受け入れている (q=2 は 64 MB で 37.8 dB、差はわずか)。元動画が 2 Mbps の 720p なので解像感の上限は元に依存する。
+- **座標系**: 論理的な横向き画面 (x 0..1279 右向き, y 0..799 下向き, y 720..799 がステータスバー) と
+  フレームバッファ (800 列 x 1280 行, 縦) の対応は **col = 799 - y, row = x**。つまりステータスバーは fb の列 0..79。
+  実機で確認済み: fb の列 799 側がユーザーから見て上、列 0 側が下。
 - 音声は元の AAC をどう扱うか未決 (`esp_audio_codec` の AAC デコーダ、または事前に WAV/PCM へ変換)。
-- 再生パイプライン: SD (SDMMC 4-bit, `esp_vfs_fat_sdmmc_mount`) → MJPEG フレーム切り出し (FFD8..FFD9) → HW JPEG デコード (RGB565)
-  → PPA SRM で 270° 回転して 1280x720 を配置 → DSI フレームバッファ (ダブルバッファ)。
+- 再生パイプライン: SD (SDMMC 4-bit, `esp_vfs_fat_sdmmc_mount`) → `mjpeg_reader` でフレーム切り出し (FFD8..FFD9)
+  → HW JPEG デコード (RGB565) を裏の DPI フレームバッファへ直接 → `esp_lcd_panel_draw_bitmap` でフリップ。
+  実測 (800x1280, q=3): 30.0 fps 安定、SD 読み込み 5〜12 ms、デコード 10.5 ms、フリップ 0.02 ms、late 0。
+  1 フレーム 33 ms のうち約 16 ms が空く。ステータスバー描画と音声はこの余裕の中に収める。
 - ベンダーの `video_lcd_display` は **カメラ→LCD** のデモであり、ファイル再生ではない。流用できるのは
   LCD 初期化 (`app_lcd.c`)、PPA による回転/スケール、ダブルバッファの `esp_lcd_dpi_panel_get_frame_buffer` の使い方。
 - 1280x720 を横向き 1280x800 の上端に配置し、下 80px (y=720..799) をステータスバーとして描画する (LovyanGFX の担当領域)。

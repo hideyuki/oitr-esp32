@@ -21,6 +21,7 @@
 #define BOARD_SD_D3              GPIO_NUM_42
 #define BOARD_SD_CMD             GPIO_NUM_44
 #define BOARD_SD_CLK             GPIO_NUM_43
+#define BOARD_SD_LDO_CHAN        4   /* on-chip LDO_VO4 powers the card */
 
 /* Audio (ES8311 over I2S) */
 #define BOARD_I2S_MCLK           GPIO_NUM_13
@@ -43,3 +44,13 @@
 #define BOARD_DISPLAY_H          800
 #define BOARD_VIDEO_H            720
 #define BOARD_STATUS_BAR_H       80
+
+/*
+ * Logical landscape -> portrait frame buffer mapping (verified on hardware):
+ * logical (x right, y down; 0..1279 x 0..799) -> frame buffer (col = 799 - y, row = x).
+ * Frame-buffer column 799 is the logical top edge; the status bar (logical
+ * y = 720..799) occupies the inclusive column range below. Video files are
+ * pre-rotated into this layout by tools/convert_video.sh.
+ */
+#define BOARD_STATUS_BAR_FB_X0   0
+#define BOARD_STATUS_BAR_FB_X1   (BOARD_STATUS_BAR_H - 1)
