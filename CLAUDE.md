@@ -38,15 +38,24 @@ OiTR の新世代版を ESP32-P4 ベースの 10.1 インチ表示モジュー�
 | I2S MCLK / BCLK / WS / DOUT / DIN | 13 / 12 / 10 / 9 / 11 |
 | MIPI DSI PHY LDO | channel 3, 2500 mV (必須) |
 
-DPI タイミング (ベンダーデモ): h=800, v=1280, hsync 20/20/40, vsync 4/10/30 (pulse/back/front), DPI clock 60–70 MHz, lane bit rate 1000 Mbps, RGB565。
-
 ### 旧パネル / 新パネル
 
-同じ型番で **JD9365 の初期化コマンド列が異なる 2 種類のパネル** が存在する。
-背面ラベルの型番末尾に **"V2" が付くものは新パネル**。ベンダーデモは `Old_Panel` / `New_Panel` で分かれている。
-初期化シーケンスは `docs/.../xiaozhi-esp32-main/main/boards/guition-jc8012p4a1{,-new}/jc8012p4a1.cc` の `lcd_cmd[]`
-または `docs/.../video_lcd_display/main/app_lcd.c` (`CONFIG_BOARD_TYPE_JC8012P4A1` ブロック) からコピーする。
-どちらのパネルか不明な場合は両方試し、動いた方を記録すること。
+同じ型番で **JD9365 の初期化コマンド列と DSI/DPI タイミングが異なる 2 種類のパネル** が存在する。
+背面ラベルの型番末尾に "V2" が付くものが新パネル。**手元の個体は旧パネル** (2026-11-06 に実機で確認。新パネル設定だと白黒の縞になる)。
+`firmware/p4/components/board/Kconfig` の `BOARD_PANEL_OLD` / `BOARD_PANEL_NEW` で切り替え、既定は OLD。
+値はベンダーの IDF 5.5.4 デモの `common_components/esp_lcd_jd9365/` (`vendor_specific_init_default[]` と
+`JD9365_800_1280_PANEL_60HZ_DPI_CONFIG`) から取ったもので、`panel_init_old.c` / `panel_init_new.c` に入っている。
+
+| | 旧パネル (手元) | 新パネル |
+| --- | --- | --- |
+| DPI clock | 60 MHz | 70 MHz |
+| lane bit rate (2 lane) | 1500 Mbps | 840 Mbps |
+| hsync pulse/back/front | 20/20/40 | 20/20/40 |
+| vsync pulse/back/front | 4/8/20 | 4/10/30 |
+| 初期化コマンド数 | 197 | 204 |
+
+ピクセルフォーマットは RGB565、DPI フレームバッファ 2 面 (PSRAM、ドライバが確保)。DSI PHY クロック源は
+チップ Rev 1.x では XTAL が使えないため `phy_clk_src = 0` (ドライバ既定 = PLL_F20M) にしている。
 
 ### 解像度についての注意
 
@@ -114,7 +123,8 @@ firmware/
   p4/              ESP32-P4 メインファームウェア (ESP-IDF プロジェクト)。idf.py はここで実行する
     main/          app_main と配線のみ。ロジックは components/ に置く
     components/
-      board/       JC8012P4A1 のピン定義 (board_pins.h)。今後 LCD/SD/codec の初期化もここ
+      board/       JC8012P4A1 のピン定義 (board_pins.h)、JD9365 DSI 初期化 (board_lcd.c, panel_init_*.c)、
+                   バックライト (board_backlight.c)。今後 SD/codec の初期化もここ
       (予定) display/      LovyanGFX と esp_lcd DSI パネルの接続、回転、フレームバッファ
       (予定) video_player/ MP4 demux → デコード → PPA → 表示
       (予定) status_bar/   下 80px の UI

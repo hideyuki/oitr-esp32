@@ -1,0 +1,18 @@
+menu "OiTR board"
+
+    choice BOARD_PANEL_VARIANT
+        prompt "JD9365 panel variant"
+        default BOARD_PANEL_OLD
+        help
+            Two panels ship under the same JC8012P4A1 part number and need
+            different JD9365 init sequences and DPI timings. A back label
+            whose part number ends with "V2" is the new panel.
+
+        config BOARD_PANEL_NEW
+            bool "New panel (label ends with V2)"
+
+        config BOARD_PANEL_OLD
+            bool "Old panel"
+    endchoice
+
+endmenu
