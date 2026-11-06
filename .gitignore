@@ -7,3 +7,9 @@ managed_components/
 __pycache__/
 .vscode/
 .idea/
+
+# Vendor material: only a curated subset is tracked (added with git add -f)
+docs/JC8012P4A1C_I_W_Y/1-Demo/
+docs/JC8012P4A1C_I_W_Y/7-Character&Picture_Molding_Tool/
+docs/JC8012P4A1C_I_W_Y/8-Burn operation/Burn files/
+docs/JC8012P4A1C_I_W_Y/8-Burn operation/flash_download_tool_3.9.7/

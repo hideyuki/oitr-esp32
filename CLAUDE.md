@@ -140,10 +140,15 @@ docs/              ベンダー資料 (参照専用)
 
 ## 動画再生の設計メモ
 
+- **動画フォーマットは MJPEG に決定** (2026-11-06)。ESP32-P4 の H.264 はハードウェアエンコーダのみで、デコードは
+  `esp_h264` のソフトウェア実装 (Baseline 限定、720p で 7〜10 fps) しかなく 720p30 は不可能。
+  P4 のハードウェア JPEG デコーダ (`esp_driver_jpeg`) を使う MJPEG はベンダーデモで 720p30 実証済み。
+- 変換パラメータ: `ffmpeg -i in.mp4 -an -vf fps=30 -c:v mjpeg -q:v 12 -pix_fmt yuvj420p out.mjpeg`。
+  `elis.mp4` (H.264 Main 1280x720 29.97fps 2.1 Mbps, AAC-LC 44.1 kHz stereo, 30 秒 7.9 MB) は約 22.8 MB (2.9 倍) になる。
+  q=12 で PSNR 32.7 dB、見た目は元と同等。ユーザーは 30fps 優先で約 3 倍のサイズを受け入れている。
+- 音声は元の AAC をどう扱うか未決 (`esp_audio_codec` の AAC デコーダ、または事前に WAV/PCM へ変換)。
+- 再生パイプライン: SD (SDMMC 4-bit, `esp_vfs_fat_sdmmc_mount`) → MJPEG フレーム切り出し (FFD8..FFD9) → HW JPEG デコード (RGB565)
+  → PPA SRM で 270° 回転して 1280x720 を配置 → DSI フレームバッファ (ダブルバッファ)。
 - ベンダーの `video_lcd_display` は **カメラ→LCD** のデモであり、ファイル再生ではない。流用できるのは
   LCD 初期化 (`app_lcd.c`)、PPA による回転/スケール、ダブルバッファの `esp_lcd_dpi_panel_get_frame_buffer` の使い方。
-- ESP32-P4 には H.264 ハードウェアデコーダ (esp_h264 コンポーネント) と JPEG デコーダがある。
-  `elis.mp4` の再生は「MP4 demux → H.264 (または MJPEG) デコード → PPA で回転/配置 → DSI フレームバッファ」のパイプラインになる。
-  コーデックが H.264 以外ならベンダーと同様に事前に MJPEG へ変換する選択肢もある。
-- SD カードは SDMMC 4-bit (上記ピン) で `esp_vfs_fat_sdmmc_mount` する。
 - 1280x720 を横向き 1280x800 の上端に配置し、下 80px (y=720..799) をステータスバーとして描画する (LovyanGFX の担当領域)。
